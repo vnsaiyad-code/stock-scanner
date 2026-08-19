@@ -1,6 +1,46 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import gspread
+import os
+import json
+from google.oauth2.service_account import Credentials
+
+
+# ==============================
+# GOOGLE SHEETS SETTINGS
+# ==============================
+
+SPREADSHEET_ID = "1Pyo8Lhivc-Kud3Xt7bnObUedV6DLiHpeRnJVkQe8Ivs"
+WORKSHEET_NAME = "NIFTY 500 SWING"
+
+
+# ==============================
+# GOOGLE SHEETS CONNECTION
+# ==============================
+
+creds_json = os.environ.get("GCP_CREDENTIALS")
+
+if not creds_json:
+    raise Exception("GCP_CREDENTIALS secret not found")
+
+service_account_info = json.loads(creds_json)
+
+scopes = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+credentials = Credentials.from_service_account_info(
+    service_account_info,
+    scopes=scopes
+)
+
+gc = gspread.authorize(credentials)
+
+spreadsheet = gc.open_by_key(SPREADSHEET_ID)
+
+worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
 
 
 # ==============================
@@ -36,6 +76,7 @@ stocks = [
 # ==============================
 
 def calculate_rsi(close, period=14):
+
     delta = close.diff()
 
     gain = delta.clip(lower=0)
@@ -54,6 +95,7 @@ def calculate_rsi(close, period=14):
 # ==============================
 
 def calculate_macd(close):
+
     ema12 = close.ewm(span=12, adjust=False).mean()
     ema26 = close.ewm(span=26, adjust=False).mean()
 
@@ -88,12 +130,24 @@ def calculate_adx(data, period=14):
     tr2 = abs(high - close.shift())
     tr3 = abs(low - close.shift())
 
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    tr = pd.concat(
+        [tr1, tr2, tr3],
+        axis=1
+    ).max(axis=1)
 
     atr = tr.rolling(period).mean()
 
-    plus_di = 100 * plus_dm.rolling(period).mean() / atr
-    minus_di = 100 * minus_dm.rolling(period).mean() / atr
+    plus_di = (
+        100 *
+        plus_dm.rolling(period).mean()
+        / atr
+    )
+
+    minus_di = (
+        100 *
+        minus_dm.rolling(period).mean()
+        / atr
+    )
 
     dx = (
         abs(plus_di - minus_di)
@@ -147,12 +201,14 @@ for symbol in stocks:
         # ADX
         data["ADX"] = calculate_adx(data)
 
-        # Volume average
-        data["AVG_VOLUME_20"] = data["Volume"].rolling(20).mean()
+        # Volume
+        data["AVG_VOLUME_20"] = (
+            data["Volume"].rolling(20).mean()
+        )
 
-        # Volume breakout
         data["VOLUME_BREAKOUT"] = (
-            data["Volume"] > data["AVG_VOLUME_20"] * 1.5
+            data["Volume"]
+            > data["AVG_VOLUME_20"] * 1.5
         )
 
         last = data.iloc[-1]
@@ -166,7 +222,9 @@ for symbol in stocks:
         macd_signal = float(last["MACD_SIGNAL"])
         adx = float(last["ADX"])
 
-        volume_breakout = bool(last["VOLUME_BREAKOUT"])
+        volume_breakout = bool(
+            last["VOLUME_BREAKOUT"]
+        )
 
         # ==============================
         # BUY CONDITIONS
@@ -192,7 +250,7 @@ for symbol in stocks:
             "MACD": round(macd, 2),
             "MACD Signal": round(macd_signal, 2),
             "ADX": round(adx, 2),
-            "Volume Breakout": volume_breakout,
+            "Volume Breakout": "YES" if volume_breakout else "NO",
             "BUY Signal": "BUY" if buy_signal else ""
         })
 
@@ -202,10 +260,38 @@ for symbol in stocks:
 
 
 # ==============================
-# RESULT
+# DATAFRAME
 # ==============================
 
 result_df = pd.DataFrame(results)
+
+
+# ==============================
+# UPLOAD TO GOOGLE SHEETS
+# ==============================
+
+print("\nUploading results to Google Sheets...")
+
+
+if not result_df.empty:
+
+    worksheet.clear()
+
+    worksheet.update(
+        [result_df.columns.values.tolist()]
+        + result_df.values.tolist()
+    )
+
+    print("Google Sheet updated successfully!")
+
+else:
+
+    print("No scanner results found.")
+
+
+# ==============================
+# DISPLAY RESULT
+# ==============================
 
 print("\n==============================")
 print("STOCK SCANNER RESULT")
