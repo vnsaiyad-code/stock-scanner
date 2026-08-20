@@ -195,7 +195,11 @@ for symbol in stocks:
         if data.empty:
             continue
 
-        data = data.dropna()
+                data = data.dropna()
+
+        # yfinance MultiIndex columns ko normal columns mein convert karo
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = data.columns.get_level_values(0)
 
         close = data["Close"]
 
