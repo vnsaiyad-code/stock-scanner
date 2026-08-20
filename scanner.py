@@ -43,15 +43,19 @@ worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
 
 
 # ============================================================
-# LOAD STOCK LIST FROM nifty500.txt
+# LOAD NIFTY 500 STOCK LIST FROM CSV
 # ============================================================
 
-with open("nifty500.txt", "r") as f:
-    stocks = [
-        line.strip()
-        for line in f.readlines()
-        if line.strip()
-    ]
+nifty500 = pd.read_csv("ind_nifty500list.csv")
+
+stocks = (
+    nifty500["Symbol"]
+    .dropna()
+    .astype(str)
+    .str.strip()
+    .apply(lambda x: x + ".NS")
+    .tolist()
+)
 
 print("Total Stocks:", len(stocks))
 
@@ -100,7 +104,6 @@ def calculate_adx(data, period=14):
     low = data["Low"]
     close = data["Close"]
 
-    # Safety for yfinance MultiIndex data
     if isinstance(high, pd.DataFrame):
         high = high.iloc[:, 0]
 
@@ -192,7 +195,10 @@ for symbol in stocks:
 
         data = data.dropna()
 
-        # Make sure required columns exist
+        # ====================================================
+        # REQUIRED COLUMNS
+        # ====================================================
+
         required_columns = [
             "Open",
             "High",
@@ -210,7 +216,6 @@ for symbol in stocks:
 
         close = data["Close"]
 
-        # Safety if Close is still DataFrame
         if isinstance(close, pd.DataFrame):
             close = close.iloc[:, 0]
 
