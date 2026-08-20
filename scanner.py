@@ -47,28 +47,12 @@ worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
 # NSE STOCK LIST
 # ==============================
 
-stocks = [
-    "RELIANCE.NS",
-    "TCS.NS",
-    "HDFCBANK.NS",
-    "ICICIBANK.NS",
-    "INFY.NS",
-    "ITC.NS",
-    "SBIN.NS",
-    "LT.NS",
-    "BHARTIARTL.NS",
-    "AXISBANK.NS",
-    "KOTAKBANK.NS",
-    "MARUTI.NS",
-    "SUNPHARMA.NS",
-    "TITAN.NS",
-    "TRENT.NS",
-    "IRFC.NS",
-    "IRCTC.NS",
-    "SUZLON.NS",
-    "JIOFIN.NS",
-    "IREDA.NS"
-]
+# ==============================
+# LOAD STOCK LIST
+# ==============================
+
+with open("nifty500.txt", "r") as f:
+    stocks = [line.strip() for line in f.readlines() if line.strip()]
 
 
 # ==============================
