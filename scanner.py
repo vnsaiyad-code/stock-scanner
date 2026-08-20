@@ -115,6 +115,16 @@ def calculate_adx(data, period=14):
     low = data["Low"]
     close = data["Close"]
 
+    # yfinance multi-column data को Series में बदलना
+    if isinstance(high, pd.DataFrame):
+        high = high.iloc[:, 0]
+
+    if isinstance(low, pd.DataFrame):
+        low = low.iloc[:, 0]
+
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+
     plus_dm = high.diff()
     minus_dm = low.diff()
 
@@ -149,9 +159,11 @@ def calculate_adx(data, period=14):
         / atr
     )
 
+    denominator = plus_di + minus_di
+
     dx = (
         abs(plus_di - minus_di)
-        / (plus_di + minus_di)
+        / denominator.replace(0, np.nan)
     ) * 100
 
     adx = dx.rolling(period).mean()
