@@ -53,8 +53,8 @@ worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
 
 with open("nifty500.txt", "r") as f:
     stocks = [line.strip() for line in f.readlines() if line.strip()]
-
-
+print("Total Stocks:", len(stocks))
+for symbol in stocks:
 # ==============================
 # RSI
 # ==============================
