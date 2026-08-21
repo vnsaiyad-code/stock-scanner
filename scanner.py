@@ -4,6 +4,9 @@ import numpy as np
 import gspread
 import os
 import json
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from google.oauth2.service_account import Credentials
 
 
@@ -13,6 +16,18 @@ from google.oauth2.service_account import Credentials
 
 SPREADSHEET_ID = "1Pyo8Lhivc-Kud3Xt7bnObUedV6DLiHpeRnJVkQe8Ivs"
 WORKSHEET_NAME = "NIFTY 500 SWING"
+
+
+# ============================================================
+# SCAN DATE - INDIA TIME
+# ============================================================
+
+scan_date = datetime.now(
+    ZoneInfo("Asia/Kolkata")
+).strftime("%d-%m-%Y")
+
+
+print("Scan Date:", scan_date)
 
 
 # ============================================================
@@ -85,11 +100,22 @@ def calculate_rsi(close, period=14):
 
 def calculate_macd(close):
 
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
+    ema12 = close.ewm(
+        span=12,
+        adjust=False
+    ).mean()
+
+    ema26 = close.ewm(
+        span=26,
+        adjust=False
+    ).mean()
 
     macd = ema12 - ema26
-    signal = macd.ewm(span=9, adjust=False).mean()
+
+    signal = macd.ewm(
+        span=9,
+        adjust=False
+    ).mean()
 
     return macd, signal
 
@@ -274,7 +300,9 @@ for symbol in stocks:
         # VOLUME BREAKOUT
         # ====================================================
 
-        data["AVG_VOLUME_20"] = volume.rolling(20).mean()
+        data["AVG_VOLUME_20"] = (
+            volume.rolling(20).mean()
+        )
 
         data["VOLUME_BREAKOUT"] = (
             volume > data["AVG_VOLUME_20"] * 1.5
@@ -284,8 +312,8 @@ for symbol in stocks:
         # ====================================================
         # 20 DAY HIGH BREAKOUT
         #
-        # Previous 20 trading days high is used.
-        # Shift(1) prevents today's high from being included.
+        # Previous 20 trading days high
+        # Today's high is NOT included.
         # ====================================================
 
         data["BREAKOUT_PRICE"] = (
@@ -298,7 +326,9 @@ for symbol in stocks:
         # ====================================================
 
         data["BREAKOUT_PERCENT"] = (
-            (close - data["BREAKOUT_PRICE"])
+            (
+                close - data["BREAKOUT_PRICE"]
+            )
             / data["BREAKOUT_PRICE"]
         ) * 100
 
@@ -310,7 +340,10 @@ for symbol in stocks:
         data = data.dropna()
 
         if data.empty:
-            print("Not enough data:", symbol)
+            print(
+                "Not enough data:",
+                symbol
+            )
             continue
 
 
@@ -329,7 +362,9 @@ for symbol in stocks:
         rsi = float(last["RSI"])
 
         macd_value = float(last["MACD"])
-        macd_signal_value = float(last["MACD_SIGNAL"])
+        macd_signal_value = float(
+            last["MACD_SIGNAL"]
+        )
 
         adx = float(last["ADX"])
 
@@ -347,7 +382,7 @@ for symbol in stocks:
 
 
         # ====================================================
-        # FRESH 20 DAY BREAKOUT
+        # FRESH BREAKOUT
         # ====================================================
 
         fresh_breakout = (
@@ -356,10 +391,7 @@ for symbol in stocks:
 
 
         # ====================================================
-        # BREAKOUT EXTENSION LIMIT
-        #
-        # Price must not be more than 5% above
-        # the breakout price.
+        # BREAKOUT <= 5%
         # ====================================================
 
         breakout_within_5_percent = (
@@ -390,6 +422,9 @@ for symbol in stocks:
 
         results.append({
 
+            "Scan Date":
+                scan_date,
+
             "Stock":
                 symbol.replace(".NS", ""),
 
@@ -412,25 +447,40 @@ for symbol in stocks:
                 round(macd_value, 2),
 
             "MACD Signal":
-                round(macd_signal_value, 2),
+                round(
+                    macd_signal_value,
+                    2
+                ),
 
             "ADX":
                 round(adx, 2),
 
             "Breakout Price":
-                round(breakout_price, 2),
+                round(
+                    breakout_price,
+                    2
+                ),
 
             "Breakout %":
-                round(breakout_percent, 2),
+                round(
+                    breakout_percent,
+                    2
+                ),
 
             "Volume Breakout":
-                "YES" if volume_breakout else "NO",
+                "YES"
+                if volume_breakout
+                else "NO",
 
             "Fresh Breakout":
-                "YES" if fresh_breakout else "NO",
+                "YES"
+                if fresh_breakout
+                else "NO",
 
             "BUY Signal":
-                "BUY" if buy_signal else ""
+                "BUY"
+                if buy_signal
+                else ""
         })
 
 
@@ -467,10 +517,18 @@ if not result_df.empty:
     result_df = (
         result_df
         .sort_values(
-            by=["BUY_SORT", "Breakout %"],
-            ascending=[True, True]
+            by=[
+                "BUY_SORT",
+                "Breakout %"
+            ],
+            ascending=[
+                True,
+                True
+            ]
         )
-        .drop(columns=["BUY_SORT"])
+        .drop(
+            columns=["BUY_SORT"]
+        )
     )
 
 
@@ -480,7 +538,9 @@ if not result_df.empty:
 
 print("")
 print("======================================")
-print("Uploading results to Google Sheets...")
+print(
+    "Uploading results to Google Sheets..."
+)
 print("======================================")
 
 
