@@ -15,7 +15,9 @@ from google.oauth2.service_account import Credentials
 # ============================================================
 
 SPREADSHEET_ID = "1Pyo8Lhivc-Kud3Xt7bnObUedV6DLiHpeRnJVkQe8Ivs"
+
 WORKSHEET_NAME = "NIFTY 500 SWING"
+HISTORY_WORKSHEET_NAME = "Scanner History"
 
 
 # ============================================================
@@ -25,7 +27,6 @@ WORKSHEET_NAME = "NIFTY 500 SWING"
 scan_date = datetime.now(
     ZoneInfo("Asia/Kolkata")
 ).strftime("%d-%m-%Y")
-
 
 print("Scan Date:", scan_date)
 
@@ -54,14 +55,45 @@ credentials = Credentials.from_service_account_info(
 gc = gspread.authorize(credentials)
 
 spreadsheet = gc.open_by_key(SPREADSHEET_ID)
+
+# Main result sheet
 worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
+
+
+# ============================================================
+# CREATE / OPEN SCANNER HISTORY SHEET
+# ============================================================
+
+try:
+
+    history_worksheet = spreadsheet.worksheet(
+        HISTORY_WORKSHEET_NAME
+    )
+
+    print(
+        "Scanner History sheet found."
+    )
+
+except gspread.WorksheetNotFound:
+
+    history_worksheet = spreadsheet.add_worksheet(
+        title=HISTORY_WORKSHEET_NAME,
+        rows=1000,
+        cols=20
+    )
+
+    print(
+        "Scanner History sheet created."
+    )
 
 
 # ============================================================
 # LOAD NIFTY 500 STOCK LIST FROM CSV
 # ============================================================
 
-nifty500 = pd.read_csv("ind_nifty500list.csv")
+nifty500 = pd.read_csv(
+    "ind_nifty500list.csv"
+)
 
 stocks = (
     nifty500["Symbol"]
@@ -72,7 +104,10 @@ stocks = (
     .tolist()
 )
 
-print("Total Stocks:", len(stocks))
+print(
+    "Total Stocks:",
+    len(stocks)
+)
 
 
 # ============================================================
@@ -89,9 +124,14 @@ def calculate_rsi(close, period=14):
     avg_gain = gain.rolling(period).mean()
     avg_loss = loss.rolling(period).mean()
 
-    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rs = avg_gain / avg_loss.replace(
+        0,
+        np.nan
+    )
 
-    return 100 - (100 / (1 + rs))
+    return 100 - (
+        100 / (1 + rs)
+    )
 
 
 # ============================================================
@@ -153,15 +193,21 @@ def calculate_adx(data, period=14):
     )
 
     tr1 = high - low
-    tr2 = abs(high - close.shift())
-    tr3 = abs(low - close.shift())
+    tr2 = abs(
+        high - close.shift()
+    )
+    tr3 = abs(
+        low - close.shift()
+    )
 
     tr = pd.concat(
         [tr1, tr2, tr3],
         axis=1
     ).max(axis=1)
 
-    atr = tr.rolling(period).mean()
+    atr = tr.rolling(
+        period
+    ).mean()
 
     plus_di = (
         100
@@ -182,7 +228,9 @@ def calculate_adx(data, period=14):
         / denominator.replace(0, np.nan)
     ) * 100
 
-    adx = dx.rolling(period).mean()
+    adx = dx.rolling(
+        period
+    ).mean()
 
     return adx
 
@@ -198,7 +246,10 @@ for symbol in stocks:
 
     try:
 
-        print("Scanning:", symbol)
+        print(
+            "Scanning:",
+            symbol
+        )
 
         data = yf.download(
             symbol,
@@ -209,7 +260,12 @@ for symbol in stocks:
         )
 
         if data.empty:
-            print("No data:", symbol)
+
+            print(
+                "No data:",
+                symbol
+            )
+
             continue
 
 
@@ -217,8 +273,15 @@ for symbol in stocks:
         # FIX YFINANCE MULTIINDEX
         # ====================================================
 
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
+        if isinstance(
+            data.columns,
+            pd.MultiIndex
+        ):
+
+            data.columns = (
+                data.columns
+                .get_level_values(0)
+            )
 
         data = data.dropna()
 
@@ -239,7 +302,12 @@ for symbol in stocks:
             column in data.columns
             for column in required_columns
         ):
-            print("Missing columns:", symbol)
+
+            print(
+                "Missing columns:",
+                symbol
+            )
+
             continue
 
 
@@ -249,17 +317,29 @@ for symbol in stocks:
 
         close = data["Close"]
 
-        if isinstance(close, pd.DataFrame):
+        if isinstance(
+            close,
+            pd.DataFrame
+        ):
+
             close = close.iloc[:, 0]
 
         high = data["High"]
 
-        if isinstance(high, pd.DataFrame):
+        if isinstance(
+            high,
+            pd.DataFrame
+        ):
+
             high = high.iloc[:, 0]
 
         volume = data["Volume"]
 
-        if isinstance(volume, pd.DataFrame):
+        if isinstance(
+            volume,
+            pd.DataFrame
+        ):
+
             volume = volume.iloc[:, 0]
 
 
@@ -267,33 +347,50 @@ for symbol in stocks:
         # DMA
         # ====================================================
 
-        data["DMA20"] = close.rolling(20).mean()
-        data["DMA50"] = close.rolling(50).mean()
-        data["DMA200"] = close.rolling(200).mean()
+        data["DMA20"] = (
+            close.rolling(20).mean()
+        )
+
+        data["DMA50"] = (
+            close.rolling(50).mean()
+        )
+
+        data["DMA200"] = (
+            close.rolling(200).mean()
+        )
 
 
         # ====================================================
         # RSI
         # ====================================================
 
-        data["RSI"] = calculate_rsi(close)
+        data["RSI"] = calculate_rsi(
+            close
+        )
 
 
         # ====================================================
         # MACD
         # ====================================================
 
-        macd, macd_signal = calculate_macd(close)
+        macd, macd_signal = (
+            calculate_macd(close)
+        )
 
         data["MACD"] = macd
-        data["MACD_SIGNAL"] = macd_signal
+
+        data["MACD_SIGNAL"] = (
+            macd_signal
+        )
 
 
         # ====================================================
         # ADX
         # ====================================================
 
-        data["ADX"] = calculate_adx(data)
+        data["ADX"] = calculate_adx(
+            data
+        )
 
 
         # ====================================================
@@ -305,7 +402,8 @@ for symbol in stocks:
         )
 
         data["VOLUME_BREAKOUT"] = (
-            volume > data["AVG_VOLUME_20"] * 1.5
+            volume
+            > data["AVG_VOLUME_20"] * 1.5
         )
 
 
@@ -317,7 +415,9 @@ for symbol in stocks:
         # ====================================================
 
         data["BREAKOUT_PRICE"] = (
-            high.rolling(20).max().shift(1)
+            high.rolling(20)
+            .max()
+            .shift(1)
         )
 
 
@@ -327,7 +427,8 @@ for symbol in stocks:
 
         data["BREAKOUT_PERCENT"] = (
             (
-                close - data["BREAKOUT_PRICE"]
+                close
+                - data["BREAKOUT_PRICE"]
             )
             / data["BREAKOUT_PRICE"]
         ) * 100
@@ -340,10 +441,12 @@ for symbol in stocks:
         data = data.dropna()
 
         if data.empty:
+
             print(
                 "Not enough data:",
                 symbol
             )
+
             continue
 
 
@@ -353,20 +456,37 @@ for symbol in stocks:
 
         last = data.iloc[-1]
 
-        price = float(last["Close"])
+        price = float(
+            last["Close"]
+        )
 
-        dma20 = float(last["DMA20"])
-        dma50 = float(last["DMA50"])
-        dma200 = float(last["DMA200"])
+        dma20 = float(
+            last["DMA20"]
+        )
 
-        rsi = float(last["RSI"])
+        dma50 = float(
+            last["DMA50"]
+        )
 
-        macd_value = float(last["MACD"])
+        dma200 = float(
+            last["DMA200"]
+        )
+
+        rsi = float(
+            last["RSI"]
+        )
+
+        macd_value = float(
+            last["MACD"]
+        )
+
         macd_signal_value = float(
             last["MACD_SIGNAL"]
         )
 
-        adx = float(last["ADX"])
+        adx = float(
+            last["ADX"]
+        )
 
         breakout_price = float(
             last["BREAKOUT_PRICE"]
@@ -404,15 +524,25 @@ for symbol in stocks:
         # ====================================================
 
         buy_signal = (
+
             price > dma20
+
             and price > dma50
+
             and price > dma200
+
             and rsi > 50
+
             and macd_value > macd_signal_value
+
             and adx > 20
+
             and volume_breakout
+
             and fresh_breakout
+
             and breakout_within_5_percent
+
         )
 
 
@@ -481,6 +611,7 @@ for symbol in stocks:
                 "BUY"
                 if buy_signal
                 else ""
+
         })
 
 
@@ -497,7 +628,9 @@ for symbol in stocks:
 # RESULT DATAFRAME
 # ============================================================
 
-result_df = pd.DataFrame(results)
+result_df = pd.DataFrame(
+    results
+)
 
 
 # ============================================================
@@ -527,7 +660,9 @@ if not result_df.empty:
             ]
         )
         .drop(
-            columns=["BUY_SORT"]
+            columns=[
+                "BUY_SORT"
+            ]
         )
     )
 
@@ -537,18 +672,30 @@ if not result_df.empty:
 # ============================================================
 
 print("")
-print("======================================")
+
+print(
+    "======================================"
+)
+
 print(
     "Uploading results to Google Sheets..."
 )
-print("======================================")
+
+print(
+    "======================================"
+)
 
 
 if not result_df.empty:
 
+
+    # ========================================================
+    # 1. UPDATE MAIN SCANNER SHEET
+    # ========================================================
+
     worksheet.clear()
 
-    worksheet.update(
+    main_data = (
         [
             result_df.columns.values.tolist()
         ]
@@ -556,9 +703,86 @@ if not result_df.empty:
         result_df.values.tolist()
     )
 
-    print(
-        "Google Sheet updated successfully!"
+    worksheet.update(
+        main_data
     )
+
+    print(
+        "NIFTY 500 SWING updated successfully!"
+    )
+
+
+    # ========================================================
+    # 2. UPDATE SCANNER HISTORY
+    #
+    # NEW DATA WILL COME AT THE TOP
+    # OLD DATA WILL MOVE DOWN
+    # ========================================================
+
+    history_headers = (
+        result_df.columns.values.tolist()
+    )
+
+    history_rows = (
+        result_df.values.tolist()
+    )
+
+
+    # --------------------------------------------------------
+    # CHECK / CREATE HEADER
+    # --------------------------------------------------------
+
+    existing_history = (
+        history_worksheet.get_all_values()
+    )
+
+
+    if not existing_history:
+
+        # First time history is being created
+
+        history_worksheet.update(
+            [
+                history_headers
+            ]
+        )
+
+        print(
+            "Scanner History header created."
+        )
+
+    else:
+
+        # Keep header updated
+
+        history_worksheet.update(
+            "A1",
+            [
+                history_headers
+            ]
+        )
+
+
+    # --------------------------------------------------------
+    # INSERT NEW DATA AT ROW 2
+    # --------------------------------------------------------
+
+    if history_rows:
+
+        history_worksheet.insert_rows(
+            history_rows,
+            row=2,
+            value_input_option="USER_ENTERED"
+        )
+
+        print(
+            "Scanner History updated successfully!"
+        )
+
+        print(
+            "New data inserted at the top."
+        )
+
 
 else:
 
@@ -572,9 +796,18 @@ else:
 # ============================================================
 
 print("")
-print("======================================")
-print("STOCK SCANNER RESULT")
-print("======================================")
+
+print(
+    "======================================"
+)
+
+print(
+    "STOCK SCANNER RESULT"
+)
+
+print(
+    "======================================"
+)
 
 print(
     result_df.to_string(
