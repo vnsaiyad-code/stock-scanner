@@ -2,8 +2,10 @@ name: Stock Scanner
 
 on:
   workflow_dispatch:
+
   schedule:
-    - cron: "30 12 * * 1-5"
+    - cron: "0 22 * * 1-5"
+      timezone: "Asia/Kolkata"
 
 jobs:
   scan:
