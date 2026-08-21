@@ -56,8 +56,9 @@ gc = gspread.authorize(credentials)
 
 spreadsheet = gc.open_by_key(SPREADSHEET_ID)
 
-# Main result sheet
-worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
+worksheet = spreadsheet.worksheet(
+    WORKSHEET_NAME
+)
 
 
 # ============================================================
@@ -121,8 +122,13 @@ def calculate_rsi(close, period=14):
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
 
-    avg_gain = gain.rolling(period).mean()
-    avg_loss = loss.rolling(period).mean()
+    avg_gain = gain.rolling(
+        period
+    ).mean()
+
+    avg_loss = loss.rolling(
+        period
+    ).mean()
 
     rs = avg_gain / avg_loss.replace(
         0,
@@ -164,38 +170,54 @@ def calculate_macd(close):
 # ADX
 # ============================================================
 
-def calculate_adx(data, period=14):
+def calculate_adx(
+    data,
+    period=14
+):
 
     high = data["High"]
     low = data["Low"]
     close = data["Close"]
 
-    if isinstance(high, pd.DataFrame):
+    if isinstance(
+        high,
+        pd.DataFrame
+    ):
         high = high.iloc[:, 0]
 
-    if isinstance(low, pd.DataFrame):
+    if isinstance(
+        low,
+        pd.DataFrame
+    ):
         low = low.iloc[:, 0]
 
-    if isinstance(close, pd.DataFrame):
+    if isinstance(
+        close,
+        pd.DataFrame
+    ):
         close = close.iloc[:, 0]
 
     plus_dm = high.diff()
     minus_dm = low.diff()
 
     plus_dm = plus_dm.where(
-        (plus_dm > minus_dm) & (plus_dm > 0),
+        (plus_dm > minus_dm)
+        & (plus_dm > 0),
         0
     )
 
     minus_dm = minus_dm.where(
-        (minus_dm > plus_dm) & (minus_dm > 0),
+        (minus_dm > plus_dm)
+        & (minus_dm > 0),
         0
     )
 
     tr1 = high - low
+
     tr2 = abs(
         high - close.shift()
     )
+
     tr3 = abs(
         low - close.shift()
     )
@@ -211,21 +233,38 @@ def calculate_adx(data, period=14):
 
     plus_di = (
         100
-        * plus_dm.rolling(period).mean()
-        / atr.replace(0, np.nan)
+        * plus_dm.rolling(
+            period
+        ).mean()
+        / atr.replace(
+            0,
+            np.nan
+        )
     )
 
     minus_di = (
         100
-        * minus_dm.rolling(period).mean()
-        / atr.replace(0, np.nan)
+        * minus_dm.rolling(
+            period
+        ).mean()
+        / atr.replace(
+            0,
+            np.nan
+        )
     )
 
-    denominator = plus_di + minus_di
+    denominator = (
+        plus_di + minus_di
+    )
 
     dx = (
-        abs(plus_di - minus_di)
-        / denominator.replace(0, np.nan)
+        abs(
+            plus_di - minus_di
+        )
+        / denominator.replace(
+            0,
+            np.nan
+        )
     ) * 100
 
     adx = dx.rolling(
@@ -321,7 +360,6 @@ for symbol in stocks:
             close,
             pd.DataFrame
         ):
-
             close = close.iloc[:, 0]
 
         high = data["High"]
@@ -330,7 +368,6 @@ for symbol in stocks:
             high,
             pd.DataFrame
         ):
-
             high = high.iloc[:, 0]
 
         volume = data["Volume"]
@@ -339,7 +376,6 @@ for symbol in stocks:
             volume,
             pd.DataFrame
         ):
-
             volume = volume.iloc[:, 0]
 
 
@@ -556,25 +592,46 @@ for symbol in stocks:
                 scan_date,
 
             "Stock":
-                symbol.replace(".NS", ""),
+                symbol.replace(
+                    ".NS",
+                    ""
+                ),
 
             "Price":
-                round(price, 2),
+                round(
+                    price,
+                    2
+                ),
 
             "DMA20":
-                round(dma20, 2),
+                round(
+                    dma20,
+                    2
+                ),
 
             "DMA50":
-                round(dma50, 2),
+                round(
+                    dma50,
+                    2
+                ),
 
             "DMA200":
-                round(dma200, 2),
+                round(
+                    dma200,
+                    2
+                ),
 
             "RSI":
-                round(rsi, 2),
+                round(
+                    rsi,
+                    2
+                ),
 
             "MACD":
-                round(macd_value, 2),
+                round(
+                    macd_value,
+                    2
+                ),
 
             "MACD Signal":
                 round(
@@ -583,7 +640,10 @@ for symbol in stocks:
                 ),
 
             "ADX":
-                round(adx, 2),
+                round(
+                    adx,
+                    2
+                ),
 
             "Breakout Price":
                 round(
@@ -690,7 +750,7 @@ if not result_df.empty:
 
 
     # ========================================================
-    # 1. UPDATE MAIN SCANNER SHEET
+    # 1. MAIN SCANNER SHEET
     # ========================================================
 
     worksheet.clear()
@@ -713,61 +773,71 @@ if not result_df.empty:
 
 
     # ========================================================
-    # 2. UPDATE SCANNER HISTORY
-    #
-    # NEW DATA WILL COME AT THE TOP
-    # OLD DATA WILL MOVE DOWN
+    # 2. SCANNER HISTORY
+    # ONLY BUY STOCKS
+    # NEWEST DATA ON TOP
     # ========================================================
 
-    history_headers = (
-        result_df.columns.values.tolist()
-    )
-
-    history_rows = (
-        result_df.values.tolist()
-    )
+    history_buy_df = result_df[
+        result_df["BUY Signal"] == "BUY"
+    ].copy()
 
 
-    # --------------------------------------------------------
-    # CHECK / CREATE HEADER
-    # --------------------------------------------------------
+    # ========================================================
+    # CHECK IF BUY STOCKS EXIST
+    # ========================================================
 
-    existing_history = (
-        history_worksheet.get_all_values()
-    )
+    if not history_buy_df.empty:
 
-
-    if not existing_history:
-
-        # First time history is being created
-
-        history_worksheet.update(
-            [
-                history_headers
-            ]
+        history_headers = (
+            history_buy_df
+            .columns
+            .values
+            .tolist()
         )
 
-        print(
-            "Scanner History header created."
-        )
-
-    else:
-
-        # Keep header updated
-
-        history_worksheet.update(
-            "A1",
-            [
-                history_headers
-            ]
+        history_rows = (
+            history_buy_df
+            .values
+            .tolist()
         )
 
 
-    # --------------------------------------------------------
-    # INSERT NEW DATA AT ROW 2
-    # --------------------------------------------------------
+        # ====================================================
+        # CHECK / CREATE HEADER
+        # ====================================================
 
-    if history_rows:
+        existing_history = (
+            history_worksheet
+            .get_all_values()
+        )
+
+
+        if not existing_history:
+
+            history_worksheet.update(
+                [
+                    history_headers
+                ]
+            )
+
+            print(
+                "Scanner History header created."
+            )
+
+        else:
+
+            history_worksheet.update(
+                "A1",
+                [
+                    history_headers
+                ]
+            )
+
+
+        # ====================================================
+        # INSERT NEW BUY DATA AT ROW 2
+        # ====================================================
 
         history_worksheet.insert_rows(
             history_rows,
@@ -780,7 +850,14 @@ if not result_df.empty:
         )
 
         print(
-            "New data inserted at the top."
+            "Only BUY stocks saved in history."
+        )
+
+
+    else:
+
+        print(
+            "No BUY stocks found today."
         )
 
 
