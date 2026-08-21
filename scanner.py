@@ -186,6 +186,7 @@ for symbol in stocks:
             print("No data:", symbol)
             continue
 
+
         # ====================================================
         # FIX YFINANCE MULTIINDEX
         # ====================================================
@@ -194,6 +195,7 @@ for symbol in stocks:
             data.columns = data.columns.get_level_values(0)
 
         data = data.dropna()
+
 
         # ====================================================
         # REQUIRED COLUMNS
@@ -214,10 +216,26 @@ for symbol in stocks:
             print("Missing columns:", symbol)
             continue
 
+
+        # ====================================================
+        # PRICE SERIES
+        # ====================================================
+
         close = data["Close"]
 
         if isinstance(close, pd.DataFrame):
             close = close.iloc[:, 0]
+
+        high = data["High"]
+
+        if isinstance(high, pd.DataFrame):
+            high = high.iloc[:, 0]
+
+        volume = data["Volume"]
+
+        if isinstance(volume, pd.DataFrame):
+            volume = volume.iloc[:, 0]
+
 
         # ====================================================
         # DMA
@@ -227,11 +245,13 @@ for symbol in stocks:
         data["DMA50"] = close.rolling(50).mean()
         data["DMA200"] = close.rolling(200).mean()
 
+
         # ====================================================
         # RSI
         # ====================================================
 
         data["RSI"] = calculate_rsi(close)
+
 
         # ====================================================
         # MACD
@@ -242,26 +262,46 @@ for symbol in stocks:
         data["MACD"] = macd
         data["MACD_SIGNAL"] = macd_signal
 
+
         # ====================================================
         # ADX
         # ====================================================
 
         data["ADX"] = calculate_adx(data)
 
+
         # ====================================================
         # VOLUME BREAKOUT
         # ====================================================
-
-        volume = data["Volume"]
-
-        if isinstance(volume, pd.DataFrame):
-            volume = volume.iloc[:, 0]
 
         data["AVG_VOLUME_20"] = volume.rolling(20).mean()
 
         data["VOLUME_BREAKOUT"] = (
             volume > data["AVG_VOLUME_20"] * 1.5
         )
+
+
+        # ====================================================
+        # 20 DAY HIGH BREAKOUT
+        #
+        # Previous 20 trading days high is used.
+        # Shift(1) prevents today's high from being included.
+        # ====================================================
+
+        data["BREAKOUT_PRICE"] = (
+            high.rolling(20).max().shift(1)
+        )
+
+
+        # ====================================================
+        # BREAKOUT PERCENTAGE
+        # ====================================================
+
+        data["BREAKOUT_PERCENT"] = (
+            (close - data["BREAKOUT_PRICE"])
+            / data["BREAKOUT_PRICE"]
+        ) * 100
+
 
         # ====================================================
         # REMOVE NaN
@@ -273,6 +313,7 @@ for symbol in stocks:
             print("Not enough data:", symbol)
             continue
 
+
         # ====================================================
         # LAST DAY DATA
         # ====================================================
@@ -280,17 +321,51 @@ for symbol in stocks:
         last = data.iloc[-1]
 
         price = float(last["Close"])
+
         dma20 = float(last["DMA20"])
         dma50 = float(last["DMA50"])
         dma200 = float(last["DMA200"])
+
         rsi = float(last["RSI"])
+
         macd_value = float(last["MACD"])
         macd_signal_value = float(last["MACD_SIGNAL"])
+
         adx = float(last["ADX"])
+
+        breakout_price = float(
+            last["BREAKOUT_PRICE"]
+        )
+
+        breakout_percent = float(
+            last["BREAKOUT_PERCENT"]
+        )
 
         volume_breakout = bool(
             last["VOLUME_BREAKOUT"]
         )
+
+
+        # ====================================================
+        # FRESH 20 DAY BREAKOUT
+        # ====================================================
+
+        fresh_breakout = (
+            price > breakout_price
+        )
+
+
+        # ====================================================
+        # BREAKOUT EXTENSION LIMIT
+        #
+        # Price must not be more than 5% above
+        # the breakout price.
+        # ====================================================
+
+        breakout_within_5_percent = (
+            breakout_percent <= 5
+        )
+
 
         # ====================================================
         # BUY CONDITIONS
@@ -304,33 +379,68 @@ for symbol in stocks:
             and macd_value > macd_signal_value
             and adx > 20
             and volume_breakout
+            and fresh_breakout
+            and breakout_within_5_percent
         )
+
 
         # ====================================================
         # RESULT
         # ====================================================
 
         results.append({
-            "Stock": symbol.replace(".NS", ""),
-            "Price": round(price, 2),
-            "DMA20": round(dma20, 2),
-            "DMA50": round(dma50, 2),
-            "DMA200": round(dma200, 2),
-            "RSI": round(rsi, 2),
-            "MACD": round(macd_value, 2),
-            "MACD Signal": round(macd_signal_value, 2),
-            "ADX": round(adx, 2),
-            "Volume Breakout": (
-                "YES" if volume_breakout else "NO"
-            ),
-            "BUY Signal": (
+
+            "Stock":
+                symbol.replace(".NS", ""),
+
+            "Price":
+                round(price, 2),
+
+            "DMA20":
+                round(dma20, 2),
+
+            "DMA50":
+                round(dma50, 2),
+
+            "DMA200":
+                round(dma200, 2),
+
+            "RSI":
+                round(rsi, 2),
+
+            "MACD":
+                round(macd_value, 2),
+
+            "MACD Signal":
+                round(macd_signal_value, 2),
+
+            "ADX":
+                round(adx, 2),
+
+            "Breakout Price":
+                round(breakout_price, 2),
+
+            "Breakout %":
+                round(breakout_percent, 2),
+
+            "Volume Breakout":
+                "YES" if volume_breakout else "NO",
+
+            "Fresh Breakout":
+                "YES" if fresh_breakout else "NO",
+
+            "BUY Signal":
                 "BUY" if buy_signal else ""
-            )
         })
+
 
     except Exception as e:
 
-        print("Error:", symbol, e)
+        print(
+            "Error:",
+            symbol,
+            e
+        )
 
 
 # ============================================================
@@ -338,6 +448,30 @@ for symbol in stocks:
 # ============================================================
 
 result_df = pd.DataFrame(results)
+
+
+# ============================================================
+# SORT BUY STOCKS TO TOP
+# ============================================================
+
+if not result_df.empty:
+
+    result_df["BUY_SORT"] = (
+        result_df["BUY Signal"]
+        .apply(
+            lambda x:
+            0 if x == "BUY" else 1
+        )
+    )
+
+    result_df = (
+        result_df
+        .sort_values(
+            by=["BUY_SORT", "Breakout %"],
+            ascending=[True, True]
+        )
+        .drop(columns=["BUY_SORT"])
+    )
 
 
 # ============================================================
@@ -362,11 +496,15 @@ if not result_df.empty:
         result_df.values.tolist()
     )
 
-    print("Google Sheet updated successfully!")
+    print(
+        "Google Sheet updated successfully!"
+    )
 
 else:
 
-    print("No scanner results found.")
+    print(
+        "No scanner results found."
+    )
 
 
 # ============================================================
@@ -378,4 +516,8 @@ print("======================================")
 print("STOCK SCANNER RESULT")
 print("======================================")
 
-print(result_df.to_string(index=False))
+print(
+    result_df.to_string(
+        index=False
+    )
+)
