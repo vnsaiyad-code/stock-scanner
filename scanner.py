@@ -4,6 +4,7 @@ import numpy as np
 import gspread
 import os
 import json
+import time
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -54,7 +55,26 @@ credentials = Credentials.from_service_account_info(
 
 gc = gspread.authorize(credentials)
 
-spreadsheet = gc.open_by_key(SPREADSHEET_ID)
+# Google Sheets API can temporarily return 503 (Service Unavailable).
+# Retry a few times before stopping the scanner.
+spreadsheet = None
+
+for attempt in range(1, 6):
+    try:
+        print(f"Opening Google Sheet (attempt {attempt}/5)...")
+        spreadsheet = gc.open_by_key(SPREADSHEET_ID)
+        print("Google Sheet opened successfully!")
+        break
+    except gspread.exceptions.APIError as e:
+        print(f"Google Sheets API error on attempt {attempt}: {e}")
+        if attempt == 5:
+            raise
+        wait_seconds = attempt * 10
+        print(f"Waiting {wait_seconds} seconds before retry...")
+        time.sleep(wait_seconds)
+
+if spreadsheet is None:
+    raise Exception("Unable to open Google Sheet after 5 attempts")
 
 worksheet = spreadsheet.worksheet(
     WORKSHEET_NAME
